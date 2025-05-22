@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Latein Vokabeltrainer</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            width: 80%;
+            max-width: 800px;
+        }
+        .vokabel {
+            font-size: 4rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            min-height: 7rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .uebersetzung {
+            font-size: 2.5rem;
+            font-weight: 500;
+            margin-top: 1rem;
+            color: #555;
+            min-height: 5rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .schwierig {
+            color: #e74c3c;
+            text-decoration: underline;
+        }
+        .hinweis {
+            margin-top: 2rem;
+            color: #888;
+            font-size: 1rem;
+        }
+        .hinweis p {
+            margin: 0.5rem 0;
+        }
+        .counter {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            font-size: 1rem;
+            color: #888;
+        }
+        .status {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: #72a16a;
+            font-style: italic;
+            min-height: 1.5rem;
+        }
+        .lektion-popup {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .lektion-popup-inner {
+            background: #fff;
+            padding: 2rem 1.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            min-width: 220px;
+            text-align: center;
+        }
+        .lektion-popup-inner h2 {
+            margin-top: 0;
+        }
+        .lektion-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+            margin: 1rem 0;
+        }
+        .lektion-btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            background: #eee;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.2s;
+        }
+        .lektion-btn:hover {
+            background: #d0e6c9;
+        }
+        @media (max-width: 600px) {
+            .vokabel {
+                font-size: 2.5rem;
+                min-height: 5rem;
+            }
+            .uebersetzung {
+                font-size: 1.8rem;
+                min-height: 4rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="counter" id="counter">0/0</div>
+    <div class="container">
+        <div class="vokabel" id="vokabel"></div>
+        <div class="uebersetzung" id="uebersetzung"></div>
+        <div class="hinweis" id="hinweis">
+            <p>Drücke die Leertaste oder tippe auf den Bildschirm, um fortzufahren</p>
+            <p>Mit den Pfeiltasten (← →) kannst du navigieren</p>
+            <p style="position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); color: #888;">made with ❤️ by Bennet</p>
+            <p>Mit Pfeil nach oben (↑) kannst du schwierige Vokabeln markieren</p>
+            <p>Drücke H um diese Hilfe ein-/auszublenden</p>
+            <p>Drücke L um Lektion zu wechseln</p>
+        </div>
+        <div class="status" id="status"></div>
+    </div>
+    <div id="uhrzeit" style="position: absolute; top: 1rem; left: 1rem; font-size: 0.95rem; color: #bbb; z-index: 10;"></div>
+
+    <div id="lektionPopup" class="lektion-popup" style="display:none;">
+        <div class="lektion-popup-inner">
+            <h2>Lektion wählen</h2>
+            <div id="lektionList" class="lektion-list"></div>
+            <button onclick="closeLektionPopup()" style="margin-top:1rem;">Abbrechen</button>
+        </div>
+    </div>
+
+    <script>
+        // Muster für eine Vokabel-JSON-Datei:
+        // [
+        //   { "latein": "amare", "deutsch": "lieben" },
+        //   { "latein": "accipere", "deutsch": "annehmen, erhalten" }
+        // ]
+        // Muster für eine Lektionstext-JSON-Datei (LT1.json):
+        // [
+        //   { "text": "Gallia est omnis divisa in partes tres..." },
+        //   { "text": "Alea iacta est." }
+        // ]
+
+        let vokabeln = [];
+        let aktuelleLektion = null;
+        let verfuegbareLektionen = [];
+        let verfuegbareLektionstexte = [];
+
+        const vokabelElement = document.getElementById('vokabel');
+        const uebersetzungElement = document.getElementById('uebersetzung');
+        const counterElement = document.getElementById('counter');
+        const statusElement = document.getElementById('status');
+        
+        let aktuelleVokabel = null;
+        let zustand = 0; // 0 = Vokabel anzeigen, 1 = Übersetzung anzeigen
+        let vokabelSequenz = [];
+        let aktuellerIndex = 0;
+        let durchlauf = 1;
+        let verlauf = []; // Speichert besuchte Indizes für Rückwärts-Navigation
+        let schwierigkeitsMenge = new Set(); // Speichert schwierige Vokabeln
+        let istLektionstext = false; // Merker ob LT geladen ist
+
+        // Am Ende des Durchlaufs die schwierigen Vokabeln als Array ausgeben
+        function ausgabeSchwierigVokabeln() {
+            if (schwierigkeitsMenge.size > 0) {
+                const schwierigeListe = [];
+                schwierigkeitsMenge.forEach(index => {
+                    schwierigeListe.push({
+                        latein: vokabeln[index].latein,
+                        deutsch: vokabeln[index].deutsch
+                    });
+                });
+                console.log("Schwierige Vokabeln als Array für neue HTML:");
+                console.log(JSON.stringify(schwierigeListe, null, 2));
+                // Beispiel für JavaScript-Code
+                console.log("\nBeispiel-Code zum Kopieren:");
+                console.log("const schwierigVokabeln = " + JSON.stringify(schwierigeListe, null, 2) + ";");
+                statusElement.textContent = `${schwierigkeitsMenge.size} schwierige Vokabeln in der Konsole geloggt (F12)`;
+                setTimeout(() => {
+                    statusElement.textContent = '';
+                }, 5000);
+            }
+        }
+
+        // Funktion zum Mischen des Arrays (Fisher-Yates Shuffle)
+        function shuffleArray(array) {
+            let shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+        
+        // Counter aktualisieren
+        function updateCounter() {
+            counterElement.textContent = `${aktuellerIndex + 1}/${vokabelSequenz.length}`;
+        }
+        
+        // Neue Lernsequenz generieren
+        function neueSequenzGenerieren() {
+            vokabelSequenz = shuffleArray(vokabeln);
+            aktuellerIndex = 0;
+            if (durchlauf > 1) {
+                statusElement.textContent = `Neuer Durchlauf ${durchlauf} gestartet!`;
+                setTimeout(() => {
+                    statusElement.textContent = '';
+                }, 3000);
+            }
+        }
+        
+        // Nächste Vokabel in der Sequenz anzeigen
+        function naechsteVokabel() {
+            if (aktuellerIndex >= vokabelSequenz.length) {
+                if (!istLektionstext) ausgabeSchwierigVokabeln();
+                durchlauf++;
+                neueSequenzGenerieren();
+            }
+            aktuelleVokabel = vokabelSequenz[aktuellerIndex];
+            if (istLektionstext) {
+                vokabelElement.textContent = "";
+                uebersetzungElement.textContent = aktuelleVokabel.text;
+                vokabelElement.classList.remove('schwierig');
+            } else {
+                vokabelElement.textContent = aktuelleVokabel.latein;
+                uebersetzungElement.textContent = '';
+                // Überprüfen ob diese Vokabel als schwierig markiert ist
+                if (schwierigkeitsMenge.has(vokabeln.indexOf(aktuelleVokabel))) {
+                    vokabelElement.classList.add('schwierig');
+                } else {
+                    vokabelElement.classList.remove('schwierig');
+                }
+            }
+            zustand = 0;
+            updateCounter();
+        }
+        
+        // Zur vorherigen Vokabel zurückgehen
+        function vorherigVokabel() {
+            if (verlauf.length > 0) {
+                aktuellerIndex = verlauf.pop();
+                aktuelleVokabel = vokabelSequenz[aktuellerIndex];
+                vokabelElement.textContent = aktuelleVokabel.latein;
+                uebersetzungElement.textContent = '';
+                zustand = 0;
+                
+                // Überprüfen ob diese Vokabel als schwierig markiert ist
+                if (schwierigkeitsMenge.has(vokabeln.indexOf(aktuelleVokabel))) {
+                    vokabelElement.classList.add('schwierig');
+                } else {
+                    vokabelElement.classList.remove('schwierig');
+                }
+                
+                updateCounter();
+            } else {
+                statusElement.textContent = "Keine vorherigen Vokabeln verfügbar";
+                setTimeout(() => {
+                    statusElement.textContent = '';
+                }, 2000);
+            }
+        }
+        
+        // Vokabel als schwierig markieren
+        function alsSchwierigeMarkieren() {
+            const vokabelIndex = vokabeln.indexOf(aktuelleVokabel);
+            
+            if (schwierigkeitsMenge.has(vokabelIndex)) {
+                schwierigkeitsMenge.delete(vokabelIndex);
+                vokabelElement.classList.remove('schwierig');
+                statusElement.textContent = "Von schwierigen Vokabeln entfernt";
+            } else {
+                schwierigkeitsMenge.add(vokabelIndex);
+                vokabelElement.classList.add('schwierig');
+                statusElement.textContent = "Als schwierig markiert";
+            }
+            
+            setTimeout(() => {
+                statusElement.textContent = '';
+            }, 2000);
+        }
+        
+        // Hilfe-Hinweis toggeln
+        const hinweisElement = document.getElementById('hinweis');
+        let hinweisSichtbar = true;
+
+        function toggleHinweis() {
+            hinweisSichtbar = !hinweisSichtbar;
+            hinweisElement.style.display = hinweisSichtbar ? 'block' : 'none';
+        }
+
+        // Lektionen und Lektionstexte prüfen (L1.json bis L30.json, LT1.json bis LT30.json)
+        async function findeVerfuegbareLektionen() {
+            const lekChecks = [];
+            const textChecks = [];
+            for (let i = 1; i <= 30; i++) {
+                const lek = `L${i}.json`;
+                const lt = `LT${i}.json`;
+                lekChecks.push(
+                    fetch(lek, { method: 'GET' })
+                        .then(r => r.ok ? lek : null)
+                        .catch(() => null)
+                );
+                textChecks.push(
+                    fetch(lt, { method: 'GET' })
+                        .then(r => r.ok ? lt : null)
+                        .catch(() => null)
+                );
+            }
+            const lekResults = await Promise.all(lekChecks);
+            const ltResults = await Promise.all(textChecks);
+            verfuegbareLektionen = lekResults.filter(Boolean);
+            verfuegbareLektionstexte = ltResults.filter(Boolean);
+        }
+
+        // Popup anzeigen (jetzt auch Lektionstexte)
+        function showLektionPopup() {
+            const popup = document.getElementById('lektionPopup');
+            const list = document.getElementById('lektionList');
+            list.innerHTML = '';
+            verfuegbareLektionen.forEach(lek => {
+                const btn = document.createElement('button');
+                btn.textContent = lek.replace('.json','');
+                btn.className = 'lektion-btn';
+                btn.onclick = () => {
+                    popup.style.display = 'none';
+                    ladeLektion(lek);
+                };
+                list.appendChild(btn);
+            });
+            // Lektionstexte hinzufügen
+            verfuegbareLektionstexte.forEach(lt => {
+                const btn = document.createElement('button');
+                btn.textContent = lt.replace('.json','');
+                btn.className = 'lektion-btn';
+                btn.onclick = () => {
+                    popup.style.display = 'none';
+                    ladeLektionstext(lt);
+                };
+                list.appendChild(btn);
+            });
+            popup.style.display = 'flex';
+        }
+        function closeLektionPopup() {
+            document.getElementById('lektionPopup').style.display = 'none';
+        }
+
+        // Lektion laden (wie gehabt)
+        async function ladeLektion(dateiname) {
+            try {
+                const res = await fetch(dateiname);
+                vokabeln = await res.json();
+                aktuelleLektion = dateiname;
+                durchlauf = 1;
+                schwierigkeitsMenge.clear();
+                verlauf = [];
+                istLektionstext = false;
+                neueSequenzGenerieren();
+                naechsteVokabel();
+                statusElement.textContent = `Lektion ${dateiname.replace('.json','')} geladen`;
+                setTimeout(() => statusElement.textContent = '', 2000);
+            } catch (e) {
+                statusElement.textContent = `Fehler beim Laden von ${dateiname}`;
+            }
+        }
+
+        // Lektionstext laden (zeigt Text statt Vokabeln)
+        async function ladeLektionstext(dateiname) {
+            try {
+                const res = await fetch(dateiname);
+                const texte = await res.json();
+                aktuelleLektion = dateiname;
+                durchlauf = 1;
+                schwierigkeitsMenge.clear();
+                verlauf = [];
+                istLektionstext = true;
+                vokabeln = texte.map(t => ({
+                    text: t.text
+                }));
+                neueSequenzGenerieren();
+                naechsteVokabel();
+                statusElement.textContent = `Lektionstext ${dateiname.replace('.json','')} geladen`;
+                setTimeout(() => statusElement.textContent = '', 2000);
+            } catch (e) {
+                statusElement.textContent = `Fehler beim Laden von ${dateiname}`;
+            }
+        }
+
+        // Event-Listener für Tastendruck
+        document.addEventListener('keydown', function(event) {
+            if (event.code === 'Space') {
+                event.preventDefault();
+                if (istLektionstext) {
+                    verlauf.push(aktuellerIndex);
+                    aktuellerIndex++;
+                    naechsteVokabel();
+                } else {
+                    if (zustand === 0) {
+                        uebersetzungElement.textContent = aktuelleVokabel.deutsch ?? "";
+                        zustand = 1;
+                    } else {
+                        verlauf.push(aktuellerIndex);
+                        aktuellerIndex++;
+                        naechsteVokabel();
+                    }
+                }
+            } else if (event.code === 'ArrowRight') {
+                event.preventDefault();
+                if (istLektionstext) {
+                    verlauf.push(aktuellerIndex);
+                    aktuellerIndex++;
+                    naechsteVokabel();
+                } else {
+                    if (zustand === 1) {
+                        verlauf.push(aktuellerIndex);
+                        aktuellerIndex++;
+                        naechsteVokabel();
+                    } else {
+                        uebersetzungElement.textContent = aktuelleVokabel.deutsch ?? "";
+                        zustand = 1;
+                    }
+                }
+            } else if (event.code === 'ArrowLeft') {
+                event.preventDefault();
+                vorherigVokabel();
+            } else if (event.code === 'ArrowUp') {
+                event.preventDefault();
+                alsSchwierigeMarkieren();
+            } else if (event.key === 'h' || event.key === 'H') {
+                toggleHinweis();
+            } else if (event.key === 'l' || event.key === 'L') {
+                showLektionPopup();
+            }
+        });
+        
+        // Touch-Event für mobile Geräte
+        document.addEventListener('touchend', function(event) {
+            if (istLektionstext) {
+                verlauf.push(aktuellerIndex);
+                aktuellerIndex++;
+                naechsteVokabel();
+            } else {
+                if (zustand === 0) {
+                    uebersetzungElement.textContent = aktuelleVokabel.deutsch ?? "";
+                    zustand = 1;
+                } else {
+                    verlauf.push(aktuellerIndex);
+                    aktuellerIndex++;
+                    naechsteVokabel();
+                }
+            }
+        });
+        
+        // Klick-Event
+        document.addEventListener('click', function(event) {
+            if (istLektionstext) {
+                verlauf.push(aktuellerIndex);
+                aktuellerIndex++;
+                naechsteVokabel();
+            } else {
+                if (zustand === 0) {
+                    uebersetzungElement.textContent = aktuelleVokabel.deutsch ?? "";
+                    zustand = 1;
+                } else {
+                    verlauf.push(aktuellerIndex);
+                    aktuellerIndex++;
+                    naechsteVokabel();
+                }
+            }
+        });
+        
+        // Uhrzeit-Anzeige (deutsche Zeit)
+        function updateUhrzeit() {
+            const jetzt = new Date();
+            // Deutschland = Mitteleuropäische Zeit (MEZ/MESZ)
+            const options = { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Berlin' };
+            document.getElementById('uhrzeit').textContent = jetzt.toLocaleTimeString('de-DE', options);
+        }
+        setInterval(updateUhrzeit, 10000); // alle 10 Sekunden aktualisieren
+        updateUhrzeit();
+
+        // Initialer Start
+        (async function() {
+            await findeVerfuegbareLektionen();
+            if (verfuegbareLektionen.length === 0) {
+                alert('Keine Lektionen (L1.json - L30.json) gefunden!');
+            } else {
+                showLektionPopup();
+            }
+        })();
+    </script>
+</body>
+</html>

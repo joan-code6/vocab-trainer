@@ -28,7 +28,7 @@
         let schwierigkeitsMenge = new Set(); // Speichert schwierige Vokabeln
         let istLektionstext = false; // Merker ob LT geladen ist
 
-        const GITHUB_BASE_URL = 'https://raw.githubusercontent.com/Redstonekey/latein-vokabeln/refs/heads/main/';
+        const GITHUB_BASE_URL = 'https://raw.githubusercontent.com/Redstonekey/vocab-trainer/main/';
         const INDEX_URL = GITHUB_BASE_URL + 'index.json';
 
         // Am Ende des Durchlaufs die schwierigen Vokabeln als Array ausgeben
@@ -166,7 +166,21 @@
                 if (!response.ok) throw new Error('Network response was not ok');
                 const indexData = await response.json();
                 
-                verfuegbareLektionen = indexData.map(entry => entry.path).filter(Boolean);
+                // Check which lesson files actually exist on GitHub
+                verfuegbareLektionen = [];
+                for (const entry of indexData) {
+                    if (entry.path) {
+                        try {
+                            const lessonResponse = await fetch(GITHUB_BASE_URL + entry.path, { method: 'HEAD' });
+                            if (lessonResponse.ok) {
+                                verfuegbareLektionen.push(entry.path);
+                            }
+                        } catch (error) {
+                            console.warn(`Lesson file ${entry.path} not accessible:`, error);
+                        }
+                    }
+                }
+                
                 verfuegbareLektionstexte = []; // Currently no Lektionstexte on GitHub
                 
                 if (verfuegbareLektionen.length === 0) {

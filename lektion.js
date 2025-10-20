@@ -188,11 +188,34 @@
                 }
             } catch (error) {
                 console.error('Fehler beim Laden des Index:', error);
-                statusElement.textContent = 'Fehler beim Laden der Lektionsliste';
-                // Show error in UI
-                vokabelElement.textContent = 'Error loading lessons';
-                uebersetzungElement.textContent = 'Please try again later';
+                // Wenn Popup offen ist, zeige Fehler dort an
+                const popup = document.getElementById('lektionPopup');
+                if (popup.style.display === 'flex') {
+                    const list = document.getElementById('lektionList');
+                    list.innerHTML = '<div style="text-align: center; padding: 2rem; color: #e74c3c;">Fehler beim Laden der Lektionen<br><small>Bitte versuche es später erneut</small></div>';
+                } else {
+                    // Andernfalls zeige Fehler in der Haupt-UI
+                    statusElement.textContent = 'Fehler beim Laden der Lektionsliste';
+                    vokabelElement.textContent = 'Error loading lessons';
+                    uebersetzungElement.textContent = 'Please try again later';
+                }
             }
+        }
+
+        // Popup mit Ladeanzeige anzeigen
+        async function showLektionPopupWithLoading() {
+            const popup = document.getElementById('lektionPopup');
+            const list = document.getElementById('lektionList');
+            
+            // Zeige Ladeanzeige
+            list.innerHTML = '<div style="text-align: center; padding: 2rem; color: #666;">Lektionen werden geladen...</div>';
+            popup.style.display = 'flex';
+            
+            // Lade verfügbare Lektionen
+            await findeVerfuegbareLektionen();
+            
+            // Zeige die geladenen Lektionen
+            showLektionPopup();
         }
 
         // Popup anzeigen (jetzt auch Lektionstexte)
@@ -315,7 +338,7 @@
             } else if (event.key === 'h' || event.key === 'H') {
                 toggleHinweis();
             } else if (event.key === 'l' || event.key === 'L') {
-                showLektionPopup();
+                showLektionPopupWithLoading();
             }
         });
         

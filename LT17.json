@@ -1,5 +1,4 @@
-{
-  "vokabeln": [
+[
     { "latein": "adulescens", "deutsch": "junger Mann" },
     { "latein": "adducere", "deutsch": "heranführen" },
     { "latein": "adesse", "deutsch": "helfen, da sein" },
@@ -127,9 +126,4 @@
     { "latein": "vox", "deutsch": "Stimme" },
     { "latein": "virtus", "deutsch": "Tugend, Tapferkeit" },
     { "latein": "vulgus", "deutsch": "das (einfache) Volk" }
-  ],
-  "lektionen": [
-    { "text": "Gallia est omnis divisa in partes tres..." },
-    { "text": "Alea iacta est." }
-  ]
-}
+]

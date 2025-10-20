@@ -1,6 +1,11 @@
 [
-  { "latein": "adulescens", "deutsch": "junger Mann" },
-  { "latein": "adducere", "deutsch": "heranführen" },
+  { 
+    "latein": "adulescens", 
+    "deutsch": "junger Mann" 
+  },
+  {
+    "latein": "adducere",
+    "deutsch": "heranführen" },
   {
     "latein": "fugere",
     "deutsch": "fliehen (vor), entfliehen, meiden"

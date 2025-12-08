@@ -2,6 +2,7 @@ let currentWords = [];
 let currentIndex = 0;
 let showingTranslation = false;
 let selectedLessons = [];
+let lastShownWordId = null;
 
 function startSession() {
     const checkboxes = document.querySelectorAll('.lektion-checkbox:checked');
@@ -17,7 +18,7 @@ function startSession() {
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ lessons: selectedLessons }),
+        body: JSON.stringify({ lessons: selectedLessons, last_word_id: lastShownWordId }),
     })
     .then(response => response.json())
     .then(data => {
@@ -47,6 +48,7 @@ function showWord() {
     }
 
     const word = currentWords[currentIndex];
+    lastShownWordId = word.id;
     document.getElementById('vokabel').innerText = word.latin;
     document.getElementById('uebersetzung').innerText = "";
     document.getElementById('counter').innerText = `${currentIndex + 1} / ${currentWords.length}`;
@@ -119,7 +121,7 @@ function loadMoreWords() {
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ lessons: selectedLessons }),
+        body: JSON.stringify({ lessons: selectedLessons, last_word_id: lastShownWordId }),
     })
     .then(response => response.json())
     .then(data => {

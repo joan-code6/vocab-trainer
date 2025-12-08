@@ -39,20 +39,24 @@ class UserWordStats(db.Model):
     # Store last 3 attempts as a string, e.g., "101" (1=correct, 0=wrong)
     last_attempts = db.Column(db.String(10), default="") 
     streak = db.Column(db.Integer, default=0)
+    negative_streak = db.Column(db.Integer, default=0)  # Track consecutive failures
 
     def add_attempt(self, is_correct):
         if self.correct_count is None: self.correct_count = 0
         if self.wrong_count is None: self.wrong_count = 0
         if self.streak is None: self.streak = 0
+        if self.negative_streak is None: self.negative_streak = 0
         if self.last_attempts is None: self.last_attempts = ""
 
         if is_correct:
             self.correct_count += 1
             self.streak += 1
+            self.negative_streak = 0  # Reset negative streak on success
             result = "1"
         else:
             self.wrong_count += 1
             self.streak = 0
+            self.negative_streak += 1  # Increment negative streak on failure
             result = "0"
         
         self.last_reviewed = datetime.utcnow()

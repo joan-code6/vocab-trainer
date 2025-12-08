@@ -59,6 +59,7 @@ def register():
 def get_words():
     data = request.get_json()
     lesson_ids = data.get('lessons', [])
+    last_word_id = data.get('last_word_id', None)
     
     if not lesson_ids:
         return jsonify([])
@@ -71,8 +72,14 @@ def get_words():
     word_pool = []
     
     for word in words:
+        # Skip the last shown word to prevent immediate repetition
+        if last_word_id and word.id == last_word_id:
+            continue
+            
         stats = UserWordStats.query.filter_by(user_id=current_user.id, word_id=word.id).first()
         confidence = stats.confidence if stats else 0.0
+        streak = stats.streak if stats else 0
+        negative_streak = stats.negative_streak if stats else 0
         
         word_data = {
             'id': word.id,
@@ -87,6 +94,23 @@ def get_words():
         # confidence 0.875 -> weight = 1.25
         # confidence 1.0 -> weight = 1 (still shows but less often)
         weight = max(1.0, 10 * (1 - confidence))
+        
+        # EXTREME BOOST for negative streaks (repeatedly failed words)
+        # This heavily prioritizes struggling words until streak reaches 2
+        if negative_streak >= 3 and streak < 2:
+            weight *= 5.0  # 5x boost for 3+ consecutive failures
+        elif negative_streak == 2 and streak < 2:
+            weight *= 3.0  # 3x boost for 2 consecutive failures
+        elif negative_streak == 1 and streak < 2:
+            weight *= 2.0  # 2x boost for 1 failure
+        
+        # Add streak bonus: words on a good streak (1-2) get a small boost
+        # This helps reinforce recently learned words without overdoing it
+        if streak == 1:
+            weight *= 1.3  # 30% boost for streak 1 (just learned)
+        elif streak == 2:
+            weight *= 1.15  # 15% boost for streak 2 (reinforcement)
+        # No bonus for streak 0 (unknown) or streak 3+ (well known)
         
         word_pool.append((word_data, weight))
     

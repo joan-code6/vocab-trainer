@@ -1,0 +1,54 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="progress-container" id="progressContainer" style="display: none;">
+    <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-text" id="progressText">0% gelernt</div>
+</div>
+
+<main>
+<div class="container">
+    <div class="counter" id="counter">0 / 0</div>
+    <div class="vokabel" id="vokabel">Wähle Lektionen...</div>
+    <div class="uebersetzung" id="uebersetzung"></div>
+    
+    <div class="controls" id="controls" style="display: none;">
+        <button class="control-btn btn-wrong" onclick="submitResult(false)">Falsch (↓)</button>
+        <button class="control-btn btn-correct" onclick="submitResult(true)">Richtig (↑)</button>
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <div class="hinweis" id="hinweis">
+        <p>Leertaste: Übersetzung anzeigen</p>
+        <p>Pfeil oben: Richtig | Pfeil unten: Falsch</p>
+    </div>
+</div>
+</main>
+
+<div class="lektion-popup" id="lektionPopup">
+    <div class="lektion-popup-inner">
+        <h2>Lektionen wählen</h2>
+        <div class="lektion-list">
+            {% if lessons %}
+                {% for lesson in lessons %}
+                <div>
+                    <input type="checkbox" id="l{{ lesson.id }}" class="lektion-checkbox" value="{{ lesson.id }}">
+                    <label for="l{{ lesson.id }}" class="lektion-label">{{ lesson.name }}</label>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p>Keine Lektionen gefunden.</p>
+                <a href="{{ url_for('import_data') }}" class="start-btn" style="text-decoration: none; display: inline-block; background-color: #3498db;">Daten importieren</a>
+            {% endif %}
+        </div>
+        {% if lessons %}
+        <button class="start-btn" onclick="startSession()">Starten</button>
+        {% endif %}
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% endblock %}

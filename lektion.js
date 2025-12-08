@@ -31,6 +31,111 @@
         const GITHUB_BASE_URL = 'https://raw.githubusercontent.com/Redstonekey/vocab-trainer/main/';
         const INDEX_URL = GITHUB_BASE_URL + 'index.json';
 
+        // Cookie utility functions
+        function setCookie(name, value, days = 30) {
+            const expires = new Date();
+            expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+            document.cookie = name + '=' + JSON.stringify(value) + ';expires=' + expires.toUTCString() + ';path=/';
+        }
+
+        function getCookie(name) {
+            const nameEQ = name + '=';
+            const ca = document.cookie.split(';');
+            for(let i = 0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+                if (c.indexOf(nameEQ) === 0) {
+                    try {
+                        return JSON.parse(c.substring(nameEQ.length, c.length));
+                    } catch (e) {
+                        return null;
+                    }
+                }
+            }
+            return null;
+        }
+
+        function deleteCookie(name) {
+            document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+        }
+
+        // Save current application state to cookies
+        function saveState() {
+            const state = {
+                aktuelleLektion,
+                vokabelSequenz: vokabelSequenz.map(v => vokabeln.indexOf(v)), // Store indices instead of objects
+                aktuellerIndex,
+                zustand,
+                durchlauf,
+                verlauf,
+                schwierigkeitsMenge: Array.from(schwierigkeitsMenge), // Convert Set to Array
+                istLektionstext,
+                hinweisSichtbar
+            };
+            setCookie('vocabTrainerState', state);
+        }
+
+        // Load application state from cookies
+        function loadState() {
+            const state = getCookie('vocabTrainerState');
+            if (state) {
+                aktuelleLektion = state.aktuelleLektion;
+                // vokabelSequenz will be restored after loading the lesson
+                aktuellerIndex = state.aktuellerIndex || 0;
+                zustand = state.zustand || 0;
+                durchlauf = state.durchlauf || 1;
+                verlauf = state.verlauf || [];
+                schwierigkeitsMenge = new Set(state.schwierigkeitsMenge || []);
+                istLektionstext = state.istLektionstext || false;
+                hinweisSichtbar = state.hinweisSichtbar !== undefined ? state.hinweisSichtbar : true;
+                
+                // Apply help visibility
+                hinweisElement.style.display = hinweisSichtbar ? 'block' : 'none';
+                
+                return state;
+            }
+            return null;
+        }
+
+        // Restore sequence after loading vocabulary
+        function restoreSequence(savedState) {
+            if (savedState && savedState.vokabelSequenz && vokabeln.length > 0) {
+                vokabelSequenz = savedState.vokabelSequenz.map(index => vokabeln[index]).filter(v => v !== undefined);
+                if (vokabelSequenz.length === 0) {
+                    // If sequence couldn't be restored, generate new one
+                    neueSequenzGenerieren();
+                } else {
+                    aktuellerIndex = Math.min(savedState.aktuellerIndex || 0, vokabelSequenz.length - 1);
+                    zustand = savedState.zustand || 0;
+                    durchlauf = savedState.durchlauf || 1;
+                    verlauf = savedState.verlauf || [];
+                    schwierigkeitsMenge = new Set(savedState.schwierigkeitsMenge || []);
+                    
+                    // Show current word
+                    aktuelleVokabel = vokabelSequenz[aktuellerIndex];
+                    if (istLektionstext) {
+                        vokabelElement.textContent = "";
+                        uebersetzungElement.textContent = aktuelleVokabel.text;
+                        vokabelElement.classList.remove('schwierig');
+                    } else {
+                        vokabelElement.textContent = aktuelleVokabel.latein;
+                        if (zustand === 1) {
+                            uebersetzungElement.textContent = aktuelleVokabel.deutsch;
+                        } else {
+                            uebersetzungElement.textContent = '';
+                        }
+                        // Check if this word is marked as difficult
+                        if (schwierigkeitsMenge.has(vokabeln.indexOf(aktuelleVokabel))) {
+                            vokabelElement.classList.add('schwierig');
+                        } else {
+                            vokabelElement.classList.remove('schwierig');
+                        }
+                    }
+                    updateCounter();
+                }
+            }
+        }
+
         // Am Ende des Durchlaufs die schwierigen Vokabeln als Array ausgeben
         function ausgabeSchwierigVokabeln() {
             if (schwierigkeitsMenge.size > 0) {
@@ -78,6 +183,7 @@
                     statusElement.textContent = '';
                 }, 3000);
             }
+            saveState();
         }
         
         // Nächste Vokabel in der Sequenz anzeigen
@@ -104,6 +210,7 @@
             }
             zustand = 0;
             updateCounter();
+            saveState();
         }
         
         // Zur vorherigen Vokabel zurückgehen
@@ -123,6 +230,7 @@
                 }
                 
                 updateCounter();
+                saveState();
             } else {
                 statusElement.textContent = "Keine vorherigen Vokabeln verfügbar";
                 setTimeout(() => {
@@ -148,6 +256,7 @@
             setTimeout(() => {
                 statusElement.textContent = '';
             }, 2000);
+            saveState();
         }
         
         // Hilfe-Hinweis toggeln
@@ -157,6 +266,7 @@
         function toggleHinweis() {
             hinweisSichtbar = !hinweisSichtbar;
             hinweisElement.style.display = hinweisSichtbar ? 'block' : 'none';
+            saveState();
         }
 
         // Lektionen und Lektionstexte prüfen (L1.json bis L30.json, LT1.json bis LT30.json)
@@ -261,8 +371,16 @@
                 schwierigkeitsMenge.clear();
                 verlauf = [];
                 istLektionstext = false;
-                neueSequenzGenerieren();
-                naechsteVokabel();
+                
+                // Check if we have saved state for this lesson
+                const savedState = getCookie('vocabTrainerState');
+                if (savedState && savedState.aktuelleLektion === dateiname && !savedState.istLektionstext) {
+                    restoreSequence(savedState);
+                } else {
+                    neueSequenzGenerieren();
+                    naechsteVokabel();
+                }
+                
                 statusElement.textContent = `Lektion ${dateiname.replace('.json','')} geladen`;
                 setTimeout(() => statusElement.textContent = '', 2000);
             } catch (e) {
@@ -284,8 +402,16 @@
                 vokabeln = texte.map(t => ({
                     text: t.text
                 }));
-                neueSequenzGenerieren();
-                naechsteVokabel();
+                
+                // Check if we have saved state for this lesson text
+                const savedState = getCookie('vocabTrainerState');
+                if (savedState && savedState.aktuelleLektion === dateiname && savedState.istLektionstext) {
+                    restoreSequence(savedState);
+                } else {
+                    neueSequenzGenerieren();
+                    naechsteVokabel();
+                }
+                
                 statusElement.textContent = `Lektionstext ${dateiname.replace('.json','')} geladen`;
                 setTimeout(() => statusElement.textContent = '', 2000);
             } catch (e) {
@@ -307,6 +433,7 @@
                     if (zustand === 0) {
                         uebersetzungElement.textContent = aktuelleVokabel?.deutsch || "";
                         zustand = 1;
+                        saveState();
                     } else {
                         verlauf.push(aktuellerIndex);
                         aktuellerIndex++;
@@ -327,6 +454,7 @@
                     } else {
                         uebersetzungElement.textContent = aktuelleVokabel.deutsch ?? "";
                         zustand = 1;
+                        saveState();
                     }
                 }
             } else if (event.code === 'ArrowLeft') {
@@ -354,6 +482,7 @@
                 if (zustand === 0) {
                     uebersetzungElement.textContent = aktuelleVokabel?.deutsch || "";
                     zustand = 1;
+                    saveState();
                 } else {
                     verlauf.push(aktuellerIndex);
                     aktuellerIndex++;
@@ -375,6 +504,7 @@
                     // Safe access with optional chaining
                     uebersetzungElement.textContent = aktuelleVokabel?.deutsch || "";
                     zustand = 1;
+                    saveState();
                 } else {
                     verlauf.push(aktuellerIndex);
                     aktuellerIndex++;
@@ -398,7 +528,47 @@
             await findeVerfuegbareLektionen();
             if (verfuegbareLektionen.length === 0) {
                 alert('Keine Lektionen (L1.json - L30.json) gefunden!');
-            } else {
-                showLektionPopup();
+                return;
             }
+            
+            // Check for saved state
+            const savedState = loadState();
+            if (savedState && savedState.aktuelleLektion) {
+                // Check if the saved lesson is still available
+                if (verfuegbareLektionen.includes(savedState.aktuelleLektion)) {
+                    if (savedState.istLektionstext) {
+                        // Load lesson text
+                        try {
+                            const res = await fetch(savedState.aktuelleLektion);
+                            if (res.ok) {
+                                const texte = await res.json();
+                                vokabeln = texte.map(t => ({ text: t.text }));
+                                restoreSequence(savedState);
+                                statusElement.textContent = `Lektionstext ${savedState.aktuelleLektion.replace('.json','')} wiederhergestellt`;
+                                setTimeout(() => statusElement.textContent = '', 2000);
+                                return;
+                            }
+                        } catch (e) {
+                            console.warn('Could not restore lesson text:', e);
+                        }
+                    } else {
+                        // Load regular lesson
+                        try {
+                            const res = await fetch(GITHUB_BASE_URL + savedState.aktuelleLektion);
+                            if (res.ok) {
+                                vokabeln = await res.json();
+                                restoreSequence(savedState);
+                                statusElement.textContent = `Lektion ${savedState.aktuelleLektion.replace('.json','')} wiederhergestellt`;
+                                setTimeout(() => statusElement.textContent = '', 2000);
+                                return;
+                            }
+                        } catch (e) {
+                            console.warn('Could not restore lesson:', e);
+                        }
+                    }
+                }
+            }
+            
+            // If no saved state or restoration failed, show lesson popup
+            showLektionPopup();
         })();
